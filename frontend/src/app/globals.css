@@ -95,3 +95,60 @@ article p {
     grid-template-columns: 1fr;
   }
 }
+
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  padding: 24px 8%;
+  
+  background: rgba(8, 8, 8, 0.75);
+  backdrop-filter: blur(12px);
+}
+
+nav > div:first-child {
+  font-weight: 700;
+  letter-spacing: 4px;
+}
+
+nav > div:last-child {
+  display: flex;
+  gap: 28px;
+}
+
+nav a {
+  color: #aaa;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+nav a:hover {
+  color: white;
+}
+
+.hero {
+  padding-top: 180px;
+}
+
+.explore-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 800px) {
+  nav > div:last-child {
+    display: none;
+  }
+
+  .explore-grid {
+    grid-template-columns: 1fr;
+  }
+}

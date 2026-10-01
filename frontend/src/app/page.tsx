@@ -1,48 +1,46 @@
+import Navbar from "@/components/Navbar";
+import Hero from "@/components/Hero";
+import ExploreCard from "@/components/ExploreCard";
+
+const exploreItems = [
+  {
+    title: "Places",
+    description: "Discover locations and their stories.",
+  },
+  {
+    title: "Stories",
+    description: "Explore culture, history and ideas.",
+  },
+  {
+    title: "People",
+    description: "Discover people connected to the world around them.",
+  },
+  {
+    title: "Businesses",
+    description: "Discover businesses and organizations.",
+  },
+];
+
 export default function Home() {
   return (
-    <main>
-      <section>
-        <p>MIZIZI — THE LIVING DIGITAL ATLAS</p>
+    <>
+      <Navbar />
 
-        <h1>
-          Discover the roots,
-          <br />
-          stories and future of Africa.
-        </h1>
+      <Hero />
 
-        <p>
-          Explore places, people, culture, history, innovation and
-          businesses through one living digital world.
-        </p>
-
-        <button>Start Exploring</button>
-      </section>
-
-      <section>
+      <section id="explore">
         <h2>Explore MIZIZI</h2>
 
-        <div>
-          <article>
-            <h3>Places</h3>
-            <p>Discover locations and their stories.</p>
-          </article>
-
-          <article>
-            <h3>Stories</h3>
-            <p>Explore culture, history and ideas.</p>
-          </article>
-
-          <article>
-            <h3>People</h3>
-            <p>Discover people connected to the world around them.</p>
-          </article>
-
-          <article>
-            <h3>Businesses</h3>
-            <p>Discover businesses and organizations.</p>
-          </article>
+        <div className="explore-grid">
+          {exploreItems.map((item) => (
+            <ExploreCard
+              key={item.title}
+              title={item.title}
+              description={item.description}
+            />
+          ))}
         </div>
       </section>
-    </main>
+    </>
   );
 }
