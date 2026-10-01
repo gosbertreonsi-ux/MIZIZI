@@ -1,26 +1,97 @@
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+* {
+  box-sizing: border-box;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  margin: 0;
+  background: #080808;
+  color: #f5f5f5;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+main {
+  min-height: 100vh;
+}
+
+section {
+  padding: 100px 8%;
+}
+
+section:first-child {
+  min-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+section:first-child p:first-child {
+  font-size: 13px;
+  letter-spacing: 4px;
+  opacity: 0.6;
+}
+
+h1 {
+  max-width: 900px;
+  margin: 20px 0;
+  font-size: clamp(50px, 8vw, 110px);
+  line-height: 0.95;
+}
+
+section:first-child p:not(:first-child) {
+  max-width: 650px;
+  font-size: 20px;
+  line-height: 1.6;
+  color: #aaa;
+}
+
+button {
+  width: fit-content;
+  margin-top: 30px;
+  padding: 16px 28px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+h2 {
+  font-size: 48px;
+}
+
+section:last-child > div {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+article {
+  min-height: 220px;
+  padding: 30px;
+  border: 1px solid #252525;
+  border-radius: 20px;
+  background: #101010;
+  transition: transform 0.3s ease;
+}
+
+article:hover {
+  transform: translateY(-8px);
+}
+
+article p {
+  color: #999;
+  line-height: 1.5;
+}
+
+@media (max-width: 800px) {
+  section {
+    padding: 70px 6%;
+  }
+
+  section:last-child > div {
+    grid-template-columns: 1fr;
+  }
 }
