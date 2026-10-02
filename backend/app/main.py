@@ -6,7 +6,8 @@ import uuid
 import os
 
 # Import the mock engine we built together last time
-from app.mock_engine import generate_video_mock
+from backend.app.mock_engine import generate_video_mock
+
 
 app = FastAPI(title="MIZIZI Local API")
 
