@@ -36,7 +36,7 @@ def get_all_jobs():
 
 
 def init_db():
-    """Creates the local database file and the jobs table if they don't exist yet."""
+    """Creates the local database file and the updated jobs table if they don't exist yet."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -44,12 +44,16 @@ def init_db():
             id TEXT PRIMARY KEY,
             prompt TEXT NOT NULL,
             status TEXT NOT NULL,
+            aspect_ratio TEXT DEFAULT '16:9',
+            steps INTEGER DEFAULT 20,
+            seed INTEGER DEFAULT -1,
             video_path TEXT,
             error_message TEXT
         )
     """)
     conn.commit()
     conn.close()
+
 
 # Initialize the database immediately when the server starts
 init_db()
@@ -125,4 +129,65 @@ def get_job_status(job_id: str):
         "status": row[2],
         "video_path": row[3],
         "error_message": row[4]
+    }
+
+
+# Update what data we expect from the frontend form parameters
+class GenerationRequest(BaseModel):
+    prompt: str
+    aspect_ratio: str = "16:9"
+    steps: int = 20
+    seed: int = -1
+
+@app.post("/api/generate")
+def create_generation_job(request: GenerationRequest, background_tasks: BackgroundTasks):
+    """Saves a new job with parameters to the local SQLite database and triggers the background task."""
+    job_id = str(uuid.uuid4())
+    
+    # Insert new job into SQLite file along with configurations
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO jobs (id, prompt, status, aspect_ratio, steps, seed, video_path, error_message)
+        VALUES (?, ?, 'QUEUED', ?, ?, ?, NULL, NULL)
+    """, (job_id, request.prompt, request.aspect_ratio, request.steps, request.seed))
+    conn.commit()
+    conn.close()
+    
+    # Send off to background processing
+    background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt)
+    return {"message": "Job successfully queued", "job_id": job_id, "status": "QUEUED"}
+
+@app.get("/api/jobs")
+def get_all_jobs():
+    """Fetches every generation job saved in the history database with configuration info."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, prompt, status, video_path, aspect_ratio, steps, seed FROM jobs ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [
+        {
+            "id": r[0], "prompt": r[1], "status": r[2], "video_path": r[3],
+            "aspect_ratio": r[4], "steps": r[5], "seed": r[6]
+        }
+        for r in rows
+    ]
+
+@app.get("/api/jobs/{job_id}")
+def get_job_status(job_id: str):
+    """Reads the configuration job state straight from the SQLite database file."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, prompt, status, video_path, error_message, aspect_ratio, steps, seed FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    return {
+        "id": row[0], "prompt": row[1], "status": row[2], "video_path": row[3], "error_message": row[4],
+        "aspect_ratio": row[5], "steps": row[6], "seed": row[7]
     }
