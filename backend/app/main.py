@@ -140,3 +140,25 @@ def get_job_status(job_id: str):
         "id": row[0], "prompt": row[1], "status": row[2], "video_path": row[3], "error_message": row[4],
         "aspect_ratio": row[5], "steps": row[6], "seed": row[7]
     }
+
+@app.delete("/api/jobs/{job_id}")
+def delete_generation_job(job_id: str):
+    """Permanently deletes a targeted generation job row from the local SQLite file."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # 1. First, check if the job actually exists
+    cursor.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    # 2. Execute the deletion query
+    cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+    conn.commit()
+    conn.close()
+    
+    print(f"[Database] 🗑️ Job {job_id} successfully purged from storage records.")
+    return {"message": "Job successfully deleted", "job_id": job_id}
