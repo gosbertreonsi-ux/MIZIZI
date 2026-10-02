@@ -5,39 +5,81 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uuid
 import os
+import sqlite3
 
-# 1. ALWAYS CREATE THE APP OBJECT FIRST
 app = FastAPI(title="MIZIZI Local API")
 
-# Import the mock engine we built together
+# Import our mock engine
 from backend.app.mock_engine import generate_video_mock
 
-# A simple dictionary to store jobs in memory for now
-jobs_database = {}
-
-# Set up local asset folders
+# Setup storage directory
 storage_dir = os.path.join(os.path.dirname(__file__), "storage")
 app.mount("/static", StaticFiles(directory=storage_dir), name="static")
 
-# Define what data we expect from the frontend
+# Define the file location for our local database
+DB_PATH = os.path.join(os.path.dirname(__file__), "mizizi.db")
+
+@app.get("/api/jobs")
+def get_all_jobs():
+    """Fetches every generation job saved in the history database."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, prompt, status, video_path FROM jobs ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Map raw rows into clean dictionaries for the frontend
+    return [
+        {"id": r[0], "prompt": r[1], "status": r[2], "video_path": r[3]}
+        for r in rows
+    ]
+
+
+def init_db():
+    """Creates the local database file and the jobs table if they don't exist yet."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS jobs (
+            id TEXT PRIMARY KEY,
+            prompt TEXT NOT NULL,
+            status TEXT NOT NULL,
+            video_path TEXT,
+            error_message TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Initialize the database immediately when the server starts
+init_db()
+
 class GenerationRequest(BaseModel):
     prompt: str
 
 # --- BACKGROUND TASK WORKER ---
 def run_ai_job_in_background(job_id: str, prompt: str):
-    """Updates the database state as the mock engine processes the request."""
-    jobs_database[job_id]["status"] = "PROCESSING"
+    """Updates the real database file as processing steps change."""
+    # 1. Update status to PROCESSING
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE jobs SET status = 'PROCESSING' WHERE id = ?", (job_id,))
+    conn.commit()
     
-    # Run our mock engine simulation
+    # 2. Trigger our simulated AI processing engine
     result = generate_video_mock(prompt, job_id)
     
-    # Update the job database with the final results
-    jobs_database[job_id]["status"] = result["status"]
-    jobs_database[job_id]["video_path"] = result["video_path"]
-    jobs_database[job_id]["error_message"] = result["error_message"]
+    # 3. Update the database file with final results (Completed or Failed)
+    cursor.execute("""
+        UPDATE jobs 
+        SET status = ?, video_path = ?, error_message = ? 
+        WHERE id = ?
+    """, (result["status"], result["video_path"], result["error_message"], job_id))
+    
+    conn.commit()
+    conn.close()
 
-
-# --- CODE ENDPOINTS (ORDERED CORRECTLY) ---
+# --- API ENDPOINTS ---
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
@@ -48,24 +90,39 @@ def read_root():
 
 @app.post("/api/generate")
 def create_generation_job(request: GenerationRequest, background_tasks: BackgroundTasks):
-    """Accepts a prompt, creates a Job ID, and queues it instantly."""
+    """Saves a new job to the local SQLite database file and triggers the background task."""
     job_id = str(uuid.uuid4())
     
-    jobs_database[job_id] = {
-        "id": job_id,
-        "prompt": request.prompt,
-        "status": "QUEUED",
-        "video_path": None,
-        "error_message": None
-    }
+    # Insert new job into SQLite file
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO jobs (id, prompt, status, video_path, error_message)
+        VALUES (?, ?, 'QUEUED', NULL, NULL)
+    """, (job_id, request.prompt))
+    conn.commit()
+    conn.close()
     
+    # Send off to background processing without waiting
     background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt)
     return {"message": "Job successfully queued", "job_id": job_id, "status": "QUEUED"}
 
 @app.get("/api/jobs/{job_id}")
 def get_job_status(job_id: str):
-    """Allows the frontend to check up on a job's progress by its ID."""
-    job = jobs_database.get(job_id)
-    if not job:
+    """Reads the job state straight from the SQLite database file."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, prompt, status, video_path, error_message FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+        
+    return {
+        "id": row[0],
+        "prompt": row[1],
+        "status": row[2],
+        "video_path": row[3],
+        "error_message": row[4]
+    }
