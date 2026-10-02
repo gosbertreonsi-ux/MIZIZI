@@ -1,21 +1,21 @@
 # backend/app/main.py
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uuid
 import os
 
-# Import the mock engine we built together last time
-from backend.app.mock_engine import generate_video_mock
-
-
+# 1. ALWAYS CREATE THE APP OBJECT FIRST
 app = FastAPI(title="MIZIZI Local API")
 
-# A simple dictionary to store jobs in memory for now (instead of a complex database)
-# In real production, this becomes PostgreSQL
+# Import the mock engine we built together
+from backend.app.mock_engine import generate_video_mock
+
+# A simple dictionary to store jobs in memory for now
 jobs_database = {}
 
-# Make our generated files accessible to the browser via a URL (e.g., http://localhost:8000/static/generations/abc.mp4)
+# Set up local asset folders
 storage_dir = os.path.join(os.path.dirname(__file__), "storage")
 app.mount("/static", StaticFiles(directory=storage_dir), name="static")
 
@@ -36,14 +36,21 @@ def run_ai_job_in_background(job_id: str, prompt: str):
     jobs_database[job_id]["video_path"] = result["video_path"]
     jobs_database[job_id]["error_message"] = result["error_message"]
 
-# --- API ENDPOINTS ---
+
+# --- CODE ENDPOINTS (ORDERED CORRECTLY) ---
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    """Serves the front-end web dashboard page."""
+    template_path = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+    with open(template_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.post("/api/generate")
 def create_generation_job(request: GenerationRequest, background_tasks: BackgroundTasks):
-    """1. Accepts a prompt, creates a Job ID, and queues it instantly."""
+    """Accepts a prompt, creates a Job ID, and queues it instantly."""
     job_id = str(uuid.uuid4())
     
-    # Initialize the job in our local memory database
     jobs_database[job_id] = {
         "id": job_id,
         "prompt": request.prompt,
@@ -52,15 +59,12 @@ def create_generation_job(request: GenerationRequest, background_tasks: Backgrou
         "error_message": None
     }
     
-    # Tell FastAPI to run this heavy task in the background without blocking the response
     background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt)
-    
-    # Reply instantly to the user
     return {"message": "Job successfully queued", "job_id": job_id, "status": "QUEUED"}
 
 @app.get("/api/jobs/{job_id}")
 def get_job_status(job_id: str):
-    """2. Allows the frontend to check up on a job's progress by its ID."""
+    """Allows the frontend to check up on a job's progress by its ID."""
     job = jobs_database.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")

@@ -1,0 +1,70 @@
+<!-- backend/app/templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIZIZI Local Dashboard</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #121212; color: #e0e0e0; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #333; box-sizing: border-box; }
+        input { background: #222; color: #fff; }
+        button { background: #0070f3; color: white; font-weight: bold; cursor: pointer; border: none; }
+        button:hover { background: #0051a8; }
+        .job-card { background: #1e1e1e; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 5px solid #555; }
+        .status-PROCESSING { border-left-color: #f5a623; }
+        .status-COMPLETED { border-left-color: #4caf50; }
+        .status-FAILED { border-left-color: #f44336; }
+    </style>
+</head>
+<body>
+    <h1>MIZIZI AI Video Generator</h1>
+    <p>Type a prompt below to simulate a video generation job local-first.</p>
+    
+    <input type="text" id="promptInput" value="A cinematic drone shot flying over a futuristic African city at sunset">
+    <button onclick="startGeneration()">Generate Video</button>
+
+    <div id="statusArea"></div>
+
+    <script>
+        async function startGeneration() {
+            const prompt = document.getElementById('promptInput').value;
+            const statusArea = document.getElementById('statusArea');
+            statusArea.innerHTML = '<p>Sending request...</p>';
+
+            // 1. Send the POST request to start the job
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
+            });
+            const data = await response.json();
+            
+            // 2. Start polling the GET endpoint automatically every 1 second
+            checkJobStatus(data.job_id);
+        }
+
+        async function checkJobStatus(jobId) {
+            const statusArea = document.getElementById('statusArea');
+            
+            const response = await fetch(`/api/jobs/${jobId}`);
+            const job = await response.json();
+
+            statusArea.innerHTML = `
+                <div class="job-card status-${job.status}">
+                    <h3>Job Status: <strong>${job.status}</strong></h3>
+                    <p><strong>ID:</strong> ${job.id}</p>
+                    <p><strong>Prompt:</strong> ${job.prompt}</p>
+                    ${job.video_path ? `<p>🎉 File created at: <code>\${job.video_path}</code></p>` : ''}
+                    ${job.error_message ? `<p style="color:red;">❌ Error: \${job.error_message}</p>` : ''}
+                </div>
+            `;
+
+            // If it's still running, check again in 1 second
+            if (job.status === 'QUEUED' || job.status === 'PROCESSING') {
+                setTimeout(() => checkJobStatus(jobId), 1000);
+            }
+        }
+    </script>
+</body>
+</html>
