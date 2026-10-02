@@ -107,8 +107,7 @@
     <h2>Generation History Gallery</h2>
     <div class="gallery-grid" id="galleryGrid"></div>
 
-
-    <!-- backend/app/templates/index.html — PART 4 -->
+<!-- backend/app/templates/index.html — PART 4 (UPDATED) -->
     <script>
         window.onload = loadGallery;
 
@@ -168,7 +167,15 @@
                         </div>
                         <div class="card-actions">
                             <span class="badge badge-${job.status}">${job.status}</span>
-                            <button class="btn-delete" onclick="deleteJob('${job.id}')">Delete</button>
+                            <div style="display: flex; gap: 5px;">
+                                <!-- Direct Download Anchor Tag Hooked up natively to local asset paths -->
+                                ${job.status === 'COMPLETED' && job.video_path ? 
+                                    `<a href="${job.video_path}" download="mizizi-${job.id}.mp4" style="text-decoration: none;">
+                                        <button class="btn-delete" style="background: #112240; color: #63b3ed; border-color: #1d4ed8;">💾 Save</button>
+                                     </a>` : ''
+                                }
+                                <button class="btn-delete" onclick="deleteJob('${job.id}')">Delete</button>
+                            </div>
                         </div>
                     </div>
                 `).join('');
@@ -177,6 +184,7 @@
             }
         }
     </script>
+
 
 <!-- backend/app/templates/index.html — PART 5 -->
     <script>
