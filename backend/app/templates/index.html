@@ -13,6 +13,10 @@
         button { background: #0070f3; color: white; font-weight: bold; cursor: pointer; border: none; }
         button:hover { background: #0051a8; }
         
+        /* Engine control selector ribbon */
+        .engine-selector { display: flex; align-items: center; justify-content: space-between; background: #1a1a1a; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #2d2d2d; }
+        .engine-selector select { width: auto; margin: 0; padding: 6px 12px; }
+
         .settings-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         .settings-matrix label { font-size: 0.8rem; color: #aaa; display: block; margin-top: 5px; }
 
@@ -28,7 +32,6 @@
         .gallery-item p { margin: 0 0 10px 0; font-size: 0.9rem; color: #b0b0b0; }
         .meta-details { font-size: 0.75rem; color: #777; margin-bottom: 10px; }
         
-        /* Card Action Row Styling */
         .card-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
         .badge-COMPLETED { background: #1b4322; color: #81c784; }
@@ -36,6 +39,10 @@
         .badge-QUEUED { background: #0a2540; color: #63b3ed; }
         .badge-FAILED { background: #420f10; color: #e57373; }
         
+        /* Engine label badge formatting styles */
+        .engine-badge { font-size: 0.7rem; padding: 2px 5px; border-radius: 3px; font-weight: bold; background: #333; color: #aaa; margin-left: 5px; }
+        .engine-LIVE { background: #2b1d42; color: #b794f4; border: 1px solid #553c7b; }
+
         .btn-delete { background: #2a1415; color: #ff8080; width: auto; padding: 5px 10px; margin: 0; font-size: 0.75rem; border: 1px solid #5a2425; }
         .btn-delete:hover { background: #4a1c1e; }
         
@@ -45,7 +52,15 @@
 <body>
     <div class="creator-panel">
         <h1>MIZIZI AI Video Generator</h1>
-        <p>Type a prompt and select generation options to update the local workflow parameters.</p>
+        
+        <!-- Interactive Module Toggle Ribbon Element -->
+        <div class="engine-selector">
+            <span>Execution Environment Layer:</span>
+            <select id="engineModeInput">
+                <option value="MOCK">🤖 Offline Simulation Mode (\$0)</option>
+                <option value="LIVE">🌐 Live Local ComfyUI Instance</option>
+            </select>
+        </div>
         
         <label style="font-size: 0.8rem; color: #aaa;">Prompt Text</label>
         <input type="text" id="promptInput" value="A cinematic drone shot flying over a futuristic African city at sunset">
@@ -96,11 +111,12 @@
                     <div class="gallery-item">
                         <div>
                             <div class="mock-video-preview">
-                                ${job.status === 'COMPLETED' ? '🎬 [Mock Video Asset Ready]' : '⏳ No Preview'}
+                                ${job.status === 'COMPLETED' ? '🎬 [Video Asset Ready]' : '⏳ No Preview'}
                             </div>
                             <p>"${job.prompt}"</p>
                             <div class="meta-details">
                                 📐 Ratio: ${job.aspect_ratio} | ⚙️ Steps: ${job.steps} | 🎲 Seed: ${job.seed}
+                                <span class="engine-badge engine-${job.engine_mode}">${job.engine_mode}</span>
                             </div>
                         </div>
                         <div class="card-actions">
@@ -116,12 +132,9 @@
 
         async function deleteJob(jobId) {
             if (!confirm("Are you sure you want to delete this generation history record?")) return;
-            
             try {
                 const response = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
-                if (response.ok) {
-                    loadGallery(); // Instantly refresh the UI grid display
-                }
+                if (response.ok) loadGallery();
             } catch (err) {
                 console.error("Failed to execute deletion endpoint call:", err);
             }
@@ -131,6 +144,7 @@
             const prompt = document.getElementById('promptInput').value;
             const aspectRatio = document.getElementById('aspectRatioInput').value;
             const steps = parseInt(document.getElementById('stepsInput').value);
+            const engineMode = document.getElementById('engineModeInput').value;
             let seed = parseInt(document.getElementById('seedInput').value);
 
             if (seed === -1) {
@@ -138,7 +152,7 @@
             }
 
             const statusArea = document.getElementById('statusArea');
-            statusArea.innerHTML = '<p>Sending parameters matrix to local queue...</p>';
+            statusArea.innerHTML = `<p>Routing request matrix to choice environmental pipeline...</p>`;
 
             const response = await fetch('/api/generate', {
                 method: 'POST',
@@ -147,7 +161,8 @@
                     prompt: prompt,
                     aspect_ratio: aspectRatio,
                     steps: steps,
-                    seed: seed
+                    seed: seed,
+                    engine_mode: engineMode
                 })
             });
             const data = await response.json();
@@ -163,8 +178,8 @@
                 <div class="job-card status-${job.status}">
                     <h3>Active Job: <strong>${job.status}</strong></h3>
                     <p><strong>Prompt:</strong> ${job.prompt}</p>
-                    <p style="font-size: 0.85rem; color:#aaa;">Config Array -> Ratio: ${job.aspect_ratio} | Steps: ${job.steps} | Seed: ${job.seed}</p>
-                    ${job.video_path ? `<p>🎉 Local link: <code>\${job.video_path}</code></p>` : ''}
+                    <p style="font-size: 0.85rem; color:#aaa;">Pipeline -> Engine: <b>${job.engine_mode}</b> | Ratio: ${job.aspect_ratio} | Steps: ${job.steps}</p>
+                    ${job.video_path ? `<p>🎉 Output Location URI: <code>\${job.video_path}</code></p>` : ''}
                     ${job.error_message ? `<p style="color:#e57373;">❌ Error: \${job.error_message}</p>` : ''}
                 </div>
             `;
