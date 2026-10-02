@@ -63,7 +63,9 @@
         }
     </style>
 
-<!-- backend/app/templates/index.html — PART 3 -->
+
+
+<!-- backend/app/templates/index.html — PART 3 (UPDATED WITH ACTIONS BAR) -->
 <body>
     <div class="creator-panel">
         <h1>MIZIZI AI Video Generator</h1>
@@ -105,9 +107,41 @@
     </div>
 
     <h2>Generation History Gallery</h2>
+    
+    <div class="filter-toolbar">
+        <div class="filter-group" style="flex: 1;">
+            <label for="searchPrompt">Search Prompts:</label>
+            <input type="text" id="searchPrompt" placeholder="Type keywords..." oninput="loadGallery()" style="margin: 0; padding: 6px 12px; background: #2a2a2a; border-color: #444; font-size: 0.85rem; width: 100%;">
+        </div>
+        <div class="filter-group">
+            <label for="filterEngine">Engine:</label>
+            <select id="filterEngine" onchange="loadGallery()">
+                <option value="ALL">All Environments</option>
+                <option value="MOCK">🤖 Mock Engine Only</option>
+                <option value="LIVE">🌐 Live Instance Only</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filterStatus">Status:</label>
+            <select id="filterStatus" onchange="loadGallery()">
+                <option value="ALL">All States</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="FAILED">Failed</option>
+                <option value="PROCESSING">Processing</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Contextual Banner triggering visibility automatically during active check loops -->
+    <div id="bulkActionsBar" class="bulk-actions-bar">
+        <span id="bulkCountLabel">0 rows selected for deletion</span>
+        <button class="btn-delete" onclick="executeBulkDelete()" style="background: #ff4d4d; color: white; border-color: #cc0000; font-weight: bold;">🗑️ Delete Selected</button>
+    </div>
+
     <div class="gallery-grid" id="galleryGrid"></div>
 
-<!-- backend/app/templates/index.html — PART 4 (UPDATED) -->
+
+    <!-- backend/app/templates/index.html — PART 4 (UPDATED WITH STEP PROGRESS) -->
     <script>
         window.onload = loadGallery;
 
@@ -129,7 +163,7 @@
                 return `
                     <div class="${containerClass}">
                         <div class="shimmer-placeholder">
-                            <span>⚡ Rendering Nodes...</span>
+                            <span style="font-weight: bold; letter-spacing: 1px; color: #f5a623;">⚡ PIPELINE ACTIVE</span>
                         </div>
                     </div>
                 `;
@@ -146,18 +180,37 @@
 
         async function loadGallery() {
             const grid = document.getElementById('galleryGrid');
+            
+            const searchText = document.getElementById('searchPrompt').value.toLowerCase();
+            const engineFilter = document.getElementById('filterEngine').value;
+            const statusFilter = document.getElementById('filterStatus').value;
+
             try {
                 const response = await fetch('/api/jobs');
-                const jobs = await response.json();
+                let jobs = await response.json();
                 
+                if (searchText) {
+                    jobs = jobs.filter(job => job.prompt.toLowerCase().includes(searchText));
+                }
+                if (engineFilter !== 'ALL') {
+                    jobs = jobs.filter(job => job.engine_mode === engineFilter);
+                }
+                if (statusFilter !== 'ALL') {
+                    jobs = jobs.filter(job => job.status === statusFilter);
+                }
+
+                updateBulkActionsBar();
+
                 if (jobs.length === 0) {
-                    grid.innerHTML = '<p style="color: #666;">No generations yet. Create one above!</p>';
+                    grid.innerHTML = '<p style="color: #666; grid-column: 1/-1; text-align: center;">No matching generations found.</p>';
                     return;
                 }
 
                 grid.innerHTML = jobs.map(job => `
                     <div class="gallery-item">
-                        <div>
+                        <input type="checkbox" class="item-checkbox" value="${job.id}" onchange="updateBulkActionsBar()">
+                        
+                        <div style="margin-top: 10px;">
                             ${renderMediaPreview(job.status, job.video_path, job.aspect_ratio)}
                             <p title="${job.prompt}">"${job.prompt}"</p>
                             <div class="meta-details">
@@ -168,9 +221,8 @@
                         <div class="card-actions">
                             <span class="badge badge-${job.status}">${job.status}</span>
                             <div style="display: flex; gap: 5px;">
-                                <!-- Direct Download Anchor Tag Hooked up natively to local asset paths -->
                                 ${job.status === 'COMPLETED' && job.video_path ? 
-                                    `<a href="${job.video_path}" download="mizizi-${job.id}.mp4" style="text-decoration: none;">
+                                    `<a href="\({job.video_path}" download="mizizi-\){job.id}.mp4" style="text-decoration: none;">
                                         <button class="btn-delete" style="background: #112240; color: #63b3ed; border-color: #1d4ed8;">💾 Save</button>
                                      </a>` : ''
                                 }
@@ -183,10 +235,33 @@
                 console.error("Failed to load gallery history:", err);
             }
         }
+
+        function updateBulkActionsBar() {
+            const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+            const bar = document.getElementById('bulkActionsBar');
+            const label = document.getElementById('bulkCountLabel');
+            
+            if (checkboxes.length > 0) {
+                bar.style.display = 'flex';
+                label.innerText = `${checkboxes.length} generation row(s) selected for removal`;
+            } else {
+                bar.style.display = 'none';
+            }
+        }
+
+        async function executeBulkDelete() {
+            const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+            if (!confirm(`Are you certain you want to permanently purge these ${checkboxes.length} records?`)) return;
+            
+            for (let cb of checkboxes) {
+                await fetch(`/api/jobs/${cb.value}`, { method: 'DELETE' });
+            }
+            loadGallery();
+        }
     </script>
 
 
-<!-- backend/app/templates/index.html — PART 5 -->
+<!-- backend/app/templates/index.html — PART 5 (UPDATED WITH STEP TIMELINE) -->
     <script>
         async function deleteJob(jobId) {
             if (!confirm("Are you sure you want to delete this history record?")) return;
@@ -229,6 +304,13 @@
             checkJobStatus(data.job_id);
         }
 
+        // Simulates dynamic console status message updates based on state durations
+        function getLiveStepLog(status) {
+            if (status === 'QUEUED') return "📥 Added to execution queue thread. Waiting for engine slot allocation...";
+            if (status === 'PROCESSING') return "⚙️ Running ComfyUI execution graph node loops. Running sample iterations...";
+            return "✅ Execution finalized. Media files compiled safely inside static directory systems.";
+        }
+
         async function checkJobStatus(jobId) {
             const statusArea = document.getElementById('statusArea');
             const response = await fetch(`/api/jobs/${jobId}`);
@@ -236,11 +318,17 @@
 
             statusArea.innerHTML = `
                 <div class="job-card status-${job.status}">
-                    <h3>Active Job: <strong>${job.status}</strong></h3>
+                    <h3>Active Job Tracking: <strong>${job.status}</strong></h3>
                     <p><strong>Prompt:</strong> ${job.prompt}</p>
-                    <p style="font-size: 0.85rem; color:#aaa;">Pipeline -> Engine: <b>${job.engine_mode}</b> | Ratio: ${job.aspect_ratio} | Steps: ${job.steps}</p>
-                    ${job.video_path ? `<p>🎉 Output Location URI: <code>\${job.video_path}</code></p>` : ''}
-                    ${job.error_message ? `<p style="color:#e57373;">❌ Error: \${job.error_message}</p>` : ''}
+                    <p style="font-size: 0.85rem; color:#aaa; margin-bottom: 5px;">Pipeline -> Engine: <b>${job.engine_mode}</b> | Ratio: ${job.aspect_ratio} | Steps: ${job.steps}</p>
+                    
+                    <!-- Live Ticker Console log feedback layer -->
+                    <div style="background: #000; font-family: monospace; padding: 10px; border-radius: 4px; font-size: 0.8rem; color: #4caf50; border: 1px solid #222;">
+                        ${getLiveStepLog(job.status)}
+                    </div>
+                    
+                    ${job.video_path ? `<p style="margin-top: 10px;">🎉 Asset URI Location: <code>\${job.video_path}</code></p>` : ''}
+                    ${job.error_message ? `<p style="color:#e57373; margin-top: 10px;">❌ Error: \${job.error_message}</p>` : ''}
                 </div>
             `;
 
@@ -253,4 +341,3 @@
     </script>
 </body>
 </html>
-
