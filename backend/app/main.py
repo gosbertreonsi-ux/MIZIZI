@@ -6,34 +6,23 @@ from pydantic import BaseModel
 import uuid
 import os
 import sqlite3
+import sys
 
+# --- BULLETPROOF PATH INJECTION ---
+# This forces Python to look right inside the directory where main.py lives
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+
+# 1. Initialize FastAPI Application Instance
 app = FastAPI(title="MIZIZI Local API")
 
-# Import our mock engine
-from backend.app.mock_engine import generate_video_mock
-
-# Setup storage directory
-storage_dir = os.path.join(os.path.dirname(__file__), "storage")
+# 2. Setup local file asset tracking routes
+storage_dir = os.path.join(CURRENT_DIR, "storage")
 app.mount("/static", StaticFiles(directory=storage_dir), name="static")
 
-# Define the file location for our local database
-DB_PATH = os.path.join(os.path.dirname(__file__), "mizizi.db")
-
-@app.get("/api/jobs")
-def get_all_jobs():
-    """Fetches every generation job saved in the history database."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, prompt, status, video_path FROM jobs ORDER BY id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    
-    # Map raw rows into clean dictionaries for the frontend
-    return [
-        {"id": r[0], "prompt": r[1], "status": r[2], "video_path": r[3]}
-        for r in rows
-    ]
-
+# 3. Define permanent local SQLite file database configurations
+DB_PATH = os.path.join(CURRENT_DIR, "mizizi.db")
 
 def init_db():
     """Creates the local database file and the updated jobs table if they don't exist yet."""
@@ -54,26 +43,33 @@ def init_db():
     conn.commit()
     conn.close()
 
-
-# Initialize the database immediately when the server starts
+# Kickstart initialization schema structures instantly on spin-up
 init_db()
 
+# 4. Import the backend network bridge adapter using our injected path pathing
+from comfy_adapter import generate_video_via_comfy
+
+# 5. Define clean single structural data schema objects
 class GenerationRequest(BaseModel):
     prompt: str
+    aspect_ratio: str = "16:9"
+    steps: int = 20
+    seed: int = -1
 
-# --- BACKGROUND TASK WORKER ---
-def run_ai_job_in_background(job_id: str, prompt: str):
-    """Updates the real database file as processing steps change."""
-    # 1. Update status to PROCESSING
+# 6. Asynchronous Background Core Execution Task
+def run_ai_job_in_background(job_id: str, prompt: str, steps: int, seed: int):
+    """Connects our runtime engine pipeline directly to local ComfyUI API layers."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    
+    # Transition row tracking parameters into processing status flags
     cursor.execute("UPDATE jobs SET status = 'PROCESSING' WHERE id = ?", (job_id,))
     conn.commit()
     
-    # 2. Trigger our simulated AI processing engine
-    result = generate_video_mock(prompt, job_id)
+    # Execute network socket/HTTP API handshake out to active backend modules
+    result = generate_video_via_comfy(prompt, steps, seed, job_id)
     
-    # 3. Update the database file with final results (Completed or Failed)
+    # Store result variables permanently back into local memory row models
     cursor.execute("""
         UPDATE jobs 
         SET status = ?, video_path = ?, error_message = ? 
@@ -83,68 +79,21 @@ def run_ai_job_in_background(job_id: str, prompt: str):
     conn.commit()
     conn.close()
 
-# --- API ENDPOINTS ---
+
+# --- DEDUPED & CLEANED API ROUTE ENDPOINTS ---
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    """Serves the front-end web dashboard page."""
-    template_path = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+    """Serves the front-end web dashboard UI page cleanly."""
+    template_path = os.path.join(CURRENT_DIR, "templates", "index.html")
     with open(template_path, "r", encoding="utf-8") as f:
         return f.read()
-
-@app.post("/api/generate")
-def create_generation_job(request: GenerationRequest, background_tasks: BackgroundTasks):
-    """Saves a new job to the local SQLite database file and triggers the background task."""
-    job_id = str(uuid.uuid4())
-    
-    # Insert new job into SQLite file
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO jobs (id, prompt, status, video_path, error_message)
-        VALUES (?, ?, 'QUEUED', NULL, NULL)
-    """, (job_id, request.prompt))
-    conn.commit()
-    conn.close()
-    
-    # Send off to background processing without waiting
-    background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt)
-    return {"message": "Job successfully queued", "job_id": job_id, "status": "QUEUED"}
-
-@app.get("/api/jobs/{job_id}")
-def get_job_status(job_id: str):
-    """Reads the job state straight from the SQLite database file."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, prompt, status, video_path, error_message FROM jobs WHERE id = ?", (job_id,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    return {
-        "id": row[0],
-        "prompt": row[1],
-        "status": row[2],
-        "video_path": row[3],
-        "error_message": row[4]
-    }
-
-
-# Update what data we expect from the frontend form parameters
-class GenerationRequest(BaseModel):
-    prompt: str
-    aspect_ratio: str = "16:9"
-    steps: int = 20
-    seed: int = -1
 
 @app.post("/api/generate")
 def create_generation_job(request: GenerationRequest, background_tasks: BackgroundTasks):
     """Saves a new job with parameters to the local SQLite database and triggers the background task."""
     job_id = str(uuid.uuid4())
     
-    # Insert new job into SQLite file along with configurations
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -154,13 +103,13 @@ def create_generation_job(request: GenerationRequest, background_tasks: Backgrou
     conn.commit()
     conn.close()
     
-    # Send off to background processing
-    background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt)
+    # Fire the async pipeline worker process off to background tasks threads
+    background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt, request.steps, request.seed)
     return {"message": "Job successfully queued", "job_id": job_id, "status": "QUEUED"}
 
 @app.get("/api/jobs")
 def get_all_jobs():
-    """Fetches every generation job saved in the history database with configuration info."""
+    """Fetches every single generation job saved in the history database matrix with configuration info."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, prompt, status, video_path, aspect_ratio, steps, seed FROM jobs ORDER BY id DESC")
@@ -177,7 +126,7 @@ def get_all_jobs():
 
 @app.get("/api/jobs/{job_id}")
 def get_job_status(job_id: str):
-    """Reads the configuration job state straight from the SQLite database file."""
+    """Reads a singular highly targeted generation job state row straight from the database."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, prompt, status, video_path, error_message, aspect_ratio, steps, seed FROM jobs WHERE id = ?", (job_id,))
