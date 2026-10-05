@@ -13,8 +13,7 @@ import urllib.request
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
-
-# backend/app/main.py — PART 2
+# backend/app/main.py — PART 2 (DATABASE UPDATED)
 app = FastAPI(title="MIZIZI Local API")
 
 # Setup local file asset tracking routes
@@ -34,6 +33,7 @@ def init_db():
             prompt TEXT NOT NULL,
             status TEXT NOT NULL,
             aspect_ratio TEXT DEFAULT '16:9',
+            resolution TEXT DEFAULT '1024x576',
             steps INTEGER DEFAULT 20,
             seed INTEGER DEFAULT -1,
             engine_mode TEXT DEFAULT 'MOCK',
@@ -46,13 +46,15 @@ def init_db():
 
 init_db()
 
-# backend/app/main.py — PART 3
+
+# backend/app/main.py — PART 3 (SCHEMA MAPPING UPDATED)
 from mock_engine import generate_video_mock
 from comfy_adapter import generate_video_via_comfy
 
 class GenerationRequest(BaseModel):
     prompt: str
     aspect_ratio: str = "16:9"
+    resolution: str = "1024x576"
     steps: int = 20
     seed: int = -1
     engine_mode: str = "MOCK"
@@ -64,6 +66,7 @@ def is_comfyui_online(address="http://127.0.0.1:8188"):
             return response.status == 200
     except Exception:
         return False
+
 
 
 # backend/app/main.py — PART 4
@@ -98,66 +101,39 @@ def run_ai_job_in_background(job_id: str, prompt: str, steps: int, seed: int, en
     conn.close()
 
 
-# backend/app/main.py — PART 5
-@app.get("/", response_class=HTMLResponse)
-def read_root():
-    """Serves the front-end web dashboard UI page cleanly."""
-    template_path = os.path.join(CURRENT_DIR, "templates", "index.html")
-    with open(template_path, "r", encoding="utf-8") as f:
-        return f.read()
-
+# backend/app/main.py — PART 5 & 6 (ROUTES UPDATED)
 @app.post("/api/generate")
 def create_generation_job(request: GenerationRequest, background_tasks: BackgroundTasks):
-    """Saves a new job with parameters to the local SQLite database and triggers the background task."""
     job_id = str(uuid.uuid4())
     
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO jobs (id, prompt, status, aspect_ratio, steps, seed, engine_mode, video_path, error_message)
-        VALUES (?, ?, 'QUEUED', ?, ?, ?, ?, NULL, NULL)
-    """, (job_id, request.prompt, request.aspect_ratio, request.steps, request.seed, request.engine_mode))
+        INSERT INTO jobs (id, prompt, status, aspect_ratio, resolution, steps, seed, engine_mode, video_path, error_message)
+        VALUES (?, ?, 'QUEUED', ?, ?, ?, ?, ?, NULL, NULL)
+    """, (job_id, request.prompt, request.aspect_ratio, request.resolution, request.steps, request.seed, request.engine_mode))
     conn.commit()
     conn.close()
     
     background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt, request.steps, request.seed, request.engine_mode)
     return {"message": "Job successfully queued", "job_id": job_id, "status": "QUEUED"}
 
-
-# backend/app/main.py — PART 6
 @app.get("/api/jobs")
 def get_all_jobs():
-    """Fetches every single generation job saved in the history database matrix with configuration info."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, prompt, status, video_path, aspect_ratio, steps, seed, engine_mode FROM jobs ORDER BY id DESC")
+    cursor.execute("SELECT id, prompt, status, video_path, aspect_ratio, steps, seed, engine_mode, resolution FROM jobs ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
     
     return [
         {
             "id": r[0], "prompt": r[1], "status": r[2], "video_path": r[3],
-            "aspect_ratio": r[4], "steps": r[5], "seed": r[6], "engine_mode": r[7]
+            "aspect_ratio": r[4], "steps": r[5], "seed": r[6], "engine_mode": r[7], "resolution": r[8]
         }
         for r in rows
     ]
 
-@app.get("/api/jobs/{job_id}")
-def get_job_status(job_id: str):
-    """Reads a singular highly targeted generation job state row straight from the database."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, prompt, status, video_path, error_message, aspect_ratio, steps, seed, engine_mode FROM jobs WHERE id = ?", (job_id,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    return {
-        "id": row[0], "prompt": row[1], "status": row[2], "video_path": row[3], "error_message": row[4],
-        "aspect_ratio": row[5], "steps": row[6], "seed": row[7], "engine_mode": row[8]
-    }
 
 
 # backend/app/main.py — PART 7
