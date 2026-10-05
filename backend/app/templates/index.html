@@ -140,8 +140,7 @@
 
     <div class="gallery-grid" id="galleryGrid"></div>
 
-
-    <!-- backend/app/templates/index.html — PART 4 (FINAL PLAYER FIXED) -->
+<!-- backend/app/templates/index.html — PART 4 (CACHE-BUSTER INTEGRATED) -->
     <script>
         window.onload = loadGallery;
 
@@ -151,10 +150,12 @@
             if (ratio === "1:1") containerClass += " video-container-1-1";
 
             if (status === 'COMPLETED' && videoPath) {
+                // Appending a live browser timestamp forces it to fetch the actual local file bytes every single frame view
+                const forcedFreshUrl = `${videoPath}?t=${new Date().getTime()}`;
                 return `
                     <div class="${containerClass}">
                         <video controls loop muted playsinline>
-                            <source src="${videoPath}" type="video/mp4">
+                            <source src="${forcedFreshUrl}" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>
                     </div>
@@ -259,8 +260,6 @@
             loadGallery();
         }
     </script>
-
-                
 
 
 <!-- backend/app/templates/index.html — PART 5 (UPDATED WITH STEP TIMELINE) -->
