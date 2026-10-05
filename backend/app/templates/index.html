@@ -65,7 +65,7 @@
 
 
 
-<!-- backend/app/templates/index.html — PART 3 (UPDATED WITH ACTIONS BAR) -->
+<!-- backend/app/templates/index.html — PART 3 (UPDATED WITH RESOLUTION SELECTOR) -->
 <body>
     <div class="creator-panel">
         <h1>MIZIZI AI Video Generator</h1>
@@ -73,8 +73,8 @@
         <div class="engine-selector">
             <span>Execution Environment Layer:</span>
             <select id="engineModeInput">
+                <option value="LIVE" selected>🌐 Live Local ComfyUI Instance</option>
                 <option value="MOCK">🤖 Offline Simulation Mode (\$0)</option>
-                <option value="LIVE">🌐 Live Local ComfyUI Instance</option>
             </select>
         </div>
         
@@ -91,13 +91,23 @@
                 </select>
             </div>
             <div>
+                <!-- New Video Dimension Selection Layer -->
+                <label>Target Resolution Size</label>
+                <select id="resolutionInput">
+                    <option value="1024x576">1024 x 576 (HD Standard)</option>
+                    <option value="768x432">768 x 432 (Balanced)</option>
+                    <option value="512x512">512 x 512 (Square Native)</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="settings-matrix">
+            <div>
                 <label>Steps</label>
                 <input type="number" id="stepsInput" value="20" min="1" max="50">
             </div>
-        </div>
-        <div class="settings-matrix">
-            <div style="grid-column: span 2;">
-                <label>Seed (Use -1 for random configuration)</label>
+            <div>
+                <label>Seed (Use -1 for random)</label>
                 <input type="number" id="seedInput" value="-1">
             </div>
         </div>
@@ -132,13 +142,14 @@
         </div>
     </div>
 
-    <!-- Contextual Banner triggering visibility automatically during active check loops -->
     <div id="bulkActionsBar" class="bulk-actions-bar">
         <span id="bulkCountLabel">0 rows selected for deletion</span>
         <button class="btn-delete" onclick="executeBulkDelete()" style="background: #ff4d4d; color: white; border-color: #cc0000; font-weight: bold;">🗑️ Delete Selected</button>
     </div>
 
     <div class="gallery-grid" id="galleryGrid"></div>
+
+
 
 <!-- backend/app/templates/index.html — PART 4 (CACHE-BUSTER INTEGRATED) -->
     <script>
@@ -262,7 +273,7 @@
     </script>
 
 
-<!-- backend/app/templates/index.html — PART 5 (UPDATED WITH STEP TIMELINE) -->
+<!-- backend/app/templates/index.html — PART 5 (UPDATED WITH RESOLUTION CODES) -->
     <script>
         async function deleteJob(jobId) {
             if (!confirm("Are you sure you want to delete this history record?")) return;
@@ -277,6 +288,7 @@
         async function startGeneration() {
             const prompt = document.getElementById('promptInput').value;
             const aspectRatio = document.getElementById('aspectRatioInput').value;
+            const resolution = document.getElementById('resolutionInput').value; // Grabs dimensions string
             const steps = parseInt(document.getElementById('stepsInput').value);
             const engineMode = document.getElementById('engineModeInput').value;
             let seed = parseInt(document.getElementById('seedInput').value);
@@ -294,6 +306,7 @@
                 body: JSON.stringify({ 
                     prompt: prompt,
                     aspect_ratio: aspectRatio,
+                    resolution: resolution, // Injected parameter field variable
                     steps: steps,
                     seed: seed,
                     engine_mode: engineMode
@@ -305,7 +318,6 @@
             checkJobStatus(data.job_id);
         }
 
-        // Simulates dynamic console status message updates based on state durations
         function getLiveStepLog(status) {
             if (status === 'QUEUED') return "📥 Added to execution queue thread. Waiting for engine slot allocation...";
             if (status === 'PROCESSING') return "⚙️ Running ComfyUI execution graph node loops. Running sample iterations...";
@@ -321,9 +333,10 @@
                 <div class="job-card status-${job.status}">
                     <h3>Active Job Tracking: <strong>${job.status}</strong></h3>
                     <p><strong>Prompt:</strong> ${job.prompt}</p>
-                    <p style="font-size: 0.85rem; color:#aaa; margin-bottom: 5px;">Pipeline -> Engine: <b>${job.engine_mode}</b> | Ratio: ${job.aspect_ratio} | Steps: ${job.steps}</p>
+                    <p style="font-size: 0.85rem; color:#aaa; margin-bottom: 5px;">
+                        Pipeline -> Engine: <b>${job.engine_mode}</b> | Ratio: ${job.aspect_ratio} | Size: ${job.resolution || 'Default'} | Steps: ${job.steps}
+                    </p>
                     
-                    <!-- Live Ticker Console log feedback layer -->
                     <div style="background: #000; font-family: monospace; padding: 10px; border-radius: 4px; font-size: 0.8rem; color: #4caf50; border: 1px solid #222;">
                         ${getLiveStepLog(job.status)}
                     </div>
