@@ -1,4 +1,4 @@
-# backend/app/comfy_adapter.py — PART 1 (REAL SYSTEM PATHING)
+# backend/app/comfy_adapter.py — PART 1 (UPDATED SYSTEM PATH)
 import json
 import urllib.request
 import urllib.parse
@@ -9,16 +9,16 @@ import time
 
 COMFYUI_ADDRESS = "127.0.0.1:8188"
 
-# CHANGE THIS to your actual ComfyUI output path so MIZIZI can find the real videos!
-COMFYUI_OUTPUT_DIR = os.path.abspath("C:/ComfyUI_windows_portable/ComfyUI/output")
+# Mapped explicitly to your local folder configuration path matrix
+COMFYUI_OUTPUT_DIR = os.path.abspath("C:/Comfy Desktop/output")
 
 
-# backend/app/comfy_adapter.py — PART 2 (REAL GENERATION & EXTRACTION LOOP)
+# backend/app/comfy_adapter.py — PART 2
 def generate_video_via_comfy(prompt: str, steps: int, seed: int, job_id: str) -> dict:
-    """Connects to live ComfyUI, runs a real generation workflow, and copies the output video."""
-    print(f"\n[ComfyUI] 🌐 Sending prompt matrix to local server port at {COMFYUI_ADDRESS}...")
+    """Connects to your local running ComfyUI desktop instance and processes real visual pixels."""
+    print(f"\n[ComfyUI Adapter] 🌐 Sending prompt parameters to local port: {COMFYUI_ADDRESS}...")
     
-    # This structure mirrors a real production text-to-video API node loop setup
+    # This JSON schema matches the structural execution block ComfyUI expects over its API port listener
     comfy_workflow = {
         "3": {
             "inputs": {"text": prompt, "clip": ["4", 0]},
@@ -45,32 +45,31 @@ def generate_video_via_comfy(prompt: str, steps: int, seed: int, job_id: str) ->
         with urllib.request.urlopen(req) as response:
             reply = json.loads(response.read().decode('utf-8'))
             prompt_id = reply.get("prompt_id")
-            print(f"[ComfyUI] 🚀 Handshake success! Node graph running in background. Prompt ID: {prompt_id}")
+            print(f"[ComfyUI Adapter] 🚀 Handshake success! Node graph running. Prompt ID: {prompt_id}")
         
-        # --- NEW REAL-TIME POLLING LOOP ---
-        # Watch the ComfyUI output directory until the real video file appears
+        # Define destination paths inside MIZIZI's static public delivery folder
         dest_dir = os.path.join(os.path.dirname(__file__), "storage", "generations")
         os.makedirs(dest_dir, exist_ok=True)
         target_filename = f"{job_id}.mp4"
         final_dest_path = os.path.join(dest_dir, target_filename)
         
-        print("[ComfyUI] ⏳ Local hardware is rendering frames. Polling output directory...")
+        print("[ComfyUI Adapter] ⏳ Polling your ComfyUI output folder for the rendered file...")
         
-        max_attempts = 120  # Max waiting time (e.g., 2 minutes)
+        # Loop and check the folder every 3 seconds for the finished asset file handle
+        max_attempts = 200
         for attempt in range(max_attempts):
-            time.sleep(2)  # Check every 2 seconds
+            time.sleep(3)
             
-            # Look for the unique file prefix we assigned in Node 10
             search_pattern = os.path.join(COMFYUI_OUTPUT_DIR, f"mizizi_{job_id}*.mp4")
             found_files = glob.glob(search_pattern)
             
             if found_files:
-                real_video_file = found_files[0]
-                print(f"[ComfyUI] 🎉 Real video file detected at: {real_video_file}")
+                real_generated_file = found_files[0]
+                print(f"[ComfyUI Adapter] 🎉 Real video file detected at: {real_generated_file}")
                 
-                # Copy the file safely out of ComfyUI and drop it directly into MIZIZI's UI gallery static folder
-                shutil.copy(real_video_file, final_dest_path)
-                print(f"[ComfyUI] ☑️ Asset successfully synchronized to MIZIZI gallery.")
+                # Clone the real media file out of ComfyUI and save it straight into MIZIZI
+                shutil.copy(real_generated_file, final_dest_path)
+                print(f"[ComfyUI Adapter] ☑️ Real file successfully synchronized to MIZIZI dashboard.")
                 
                 return {
                     "status": "COMPLETED",
@@ -78,12 +77,12 @@ def generate_video_via_comfy(prompt: str, steps: int, seed: int, job_id: str) ->
                     "error_message": None
                 }
                 
-        raise TimeoutError("ComfyUI generation took too long or failed to write file to disk.")
+        raise TimeoutError("The processing loop timed out before your hardware finished rendering.")
             
     except Exception as e:
-        print(f"[ComfyUI] ❌ Real pipeline generation error instance: {str(e)}")
+        print(f"[ComfyUI Adapter] ❌ Execution pipeline error layout: {str(e)}")
         return {
             "status": "FAILED",
             "video_path": None,
-            "error_message": f"Pipeline processing failed: {str(e)}"
+            "error_message": f"Real pipeline processing failed: {str(e)}"
         }
