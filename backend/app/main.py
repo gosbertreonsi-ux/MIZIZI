@@ -1,4 +1,4 @@
-# backend/app/main.py
+# backend/app/main.py — PART 1
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -7,20 +7,21 @@ import uuid
 import os
 import sqlite3
 import sys
+import urllib.request
 
 # --- BULLETPROOF PATH INJECTION ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
-# 1. Initialize FastAPI Application Instance
+# backend/app/main.py — PART 2
 app = FastAPI(title="MIZIZI Local API")
 
-# 2. Setup local file asset tracking routes
+# Setup local file asset tracking routes
 storage_dir = os.path.join(CURRENT_DIR, "storage")
 app.mount("/static", StaticFiles(directory=storage_dir), name="static")
 
-# 3. Define permanent local SQLite file database configurations
+# Define permanent local SQLite file database configurations
 DB_PATH = os.path.join(CURRENT_DIR, "mizizi.db")
 
 def init_db():
@@ -43,39 +44,50 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Kickstart initialization schema structures instantly on spin-up
 init_db()
 
-# 4. Import both execution engines
+# backend/app/main.py — PART 3
 from mock_engine import generate_video_mock
 from comfy_adapter import generate_video_via_comfy
 
-# 5. Define clean single structural data schema objects
 class GenerationRequest(BaseModel):
     prompt: str
     aspect_ratio: str = "16:9"
     steps: int = 20
     seed: int = -1
-    engine_mode: str = "MOCK" # Accept 'MOCK' or 'LIVE' from the frontend toggle
+    engine_mode: str = "MOCK"
 
-# 6. Asynchronous Background Core Execution Task
+def is_comfyui_online(address="http://127.0.0.1:8188"):
+    """Quickly pings your local ComfyUI app port to see if it's awake."""
+    try:
+        with urllib.request.urlopen(address, timeout=1.0) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
+# backend/app/main.py — PART 4
 def run_ai_job_in_background(job_id: str, prompt: str, steps: int, seed: int, engine_mode: str):
-    """Dynamically routes the generation pipeline based on the selected mode flag."""
+    """Dynamically routes the generation pipeline based on the selected mode flag and live ping state."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute("UPDATE jobs SET status = 'PROCESSING' WHERE id = ?", (job_id,))
     conn.commit()
     
-    # --- DYNAMIC ROUTING MATRIX ---
-    if engine_mode == "LIVE":
-        print(f"[Queue Worker] 🌐 Routing job {job_id} to Real Live ComfyUI Adapter Pipeline...")
+    # --- AUTOMATIC ROUTING MATRIX ---
+    if engine_mode == "LIVE" and is_comfyui_online():
+        print(f"[Queue Worker] 🌐 Local ComfyUI detected online! Routing job {job_id} to Live pipeline...")
         result = generate_video_via_comfy(prompt, steps, seed, job_id)
     else:
-        print(f"[Queue Worker] 🤖 Routing job {job_id} to Local Mock Engine Simulator Pipeline...")
+        if engine_mode == "LIVE":
+            print(f"[Queue Worker] ⚠️ ComfyUI is offline or unreachable on port 8188. Falling back safely to Mock Simulation!")
+        else:
+            print(f"[Queue Worker] 🤖 Routing job {job_id} to Local Mock Engine Simulator Pipeline...")
+            
         result = generate_video_mock(prompt, job_id)
     
-    # Store result variables permanently back into local memory row models
+    # Store result variables permanently back into database rows
     cursor.execute("""
         UPDATE jobs 
         SET status = ?, video_path = ?, error_message = ? 
@@ -86,8 +98,7 @@ def run_ai_job_in_background(job_id: str, prompt: str, steps: int, seed: int, en
     conn.close()
 
 
-# --- API ROUTE ENDPOINTS ---
-
+# backend/app/main.py — PART 5
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     """Serves the front-end web dashboard UI page cleanly."""
@@ -109,10 +120,11 @@ def create_generation_job(request: GenerationRequest, background_tasks: Backgrou
     conn.commit()
     conn.close()
     
-    # Fire the async pipeline worker process off to background tasks threads with dynamic engine tracking
     background_tasks.add_task(run_ai_job_in_background, job_id, request.prompt, request.steps, request.seed, request.engine_mode)
     return {"message": "Job successfully queued", "job_id": job_id, "status": "QUEUED"}
 
+
+# backend/app/main.py — PART 6
 @app.get("/api/jobs")
 def get_all_jobs():
     """Fetches every single generation job saved in the history database matrix with configuration info."""
@@ -147,6 +159,8 @@ def get_job_status(job_id: str):
         "aspect_ratio": row[5], "steps": row[6], "seed": row[7], "engine_mode": row[8]
     }
 
+
+# backend/app/main.py — PART 7
 @app.delete("/api/jobs/{job_id}")
 def delete_generation_job(job_id: str):
     """Permanently purges a specific history entry row from the sqlite database configuration."""

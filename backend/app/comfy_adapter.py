@@ -7,7 +7,7 @@ import shutil
 import glob
 import time
 
-COMFYUI_ADDRESS = "127.0.0.1:8188"
+COMFYUI_ADDRESS = "127.0.0.1:8000"
 
 # Mapped explicitly to your local folder configuration path matrix
 COMFYUI_OUTPUT_DIR = os.path.abspath("C:/Comfy Desktop/output")
