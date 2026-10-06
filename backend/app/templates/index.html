@@ -151,7 +151,7 @@
 
 
 
-<!-- backend/app/templates/index.html — PART 4 (CACHE-BUSTER INTEGRATED) -->
+<!-- backend/app/templates/index.html — PART 4 (IMAGE & VIDEO COMPATIBLE PREVIEW) -->
     <script>
         window.onload = loadGallery;
 
@@ -161,8 +161,18 @@
             if (ratio === "1:1") containerClass += " video-container-1-1";
 
             if (status === 'COMPLETED' && videoPath) {
-                // Appending a live browser timestamp forces it to fetch the actual local file bytes every single frame view
                 const forcedFreshUrl = `${videoPath}?t=${new Date().getTime()}`;
+                
+                // NEW COMPATIBILITY CHECK: Renders an image element if the file handle is a PNG asset
+                if (videoPath.toLowerCase().endsWith('.png')) {
+                    return `
+                        <div class="${containerClass}">
+                            <img src="${forcedFreshUrl}" style="width:100%; height:100%; object-fit:cover;" alt="Generation Output">
+                        </div>
+                    `;
+                }
+                
+                // Standard looping HTML5 video player wrapper fallback
                 return `
                     <div class="${containerClass}">
                         <video controls loop muted playsinline>
@@ -234,7 +244,7 @@
                             <span class="badge badge-${job.status}">${job.status}</span>
                             <div style="display: flex; gap: 5px;">
                                 ${job.status === 'COMPLETED' && job.video_path ? 
-                                    `<a href="\({job.video_path}" download="mizizi-\){job.id}.mp4" style="text-decoration: none;">
+                                    `<a href="\({job.video_path}" download="mizizi-\){job.id}" style="text-decoration: none;">
                                         <button class="btn-delete" style="background: #112240; color: #63b3ed; border-color: #1d4ed8;">💾 Save</button>
                                      </a>` : ''
                                 }
@@ -271,6 +281,8 @@
             loadGallery();
         }
     </script>
+
+
 
 
 <!-- backend/app/templates/index.html — PART 5 (UPDATED WITH RESOLUTION CODES) -->
